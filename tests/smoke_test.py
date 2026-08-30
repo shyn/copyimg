@@ -46,6 +46,13 @@ def base_payload(**overrides):
     return payload
 
 
+def parse_block_json(result):
+    """The hook's JSON response is the last non-empty line of its stdout."""
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    assert lines, "hook produced no stdout (stderr: %s)" % result.stderr[-500:]
+    return json.loads(lines[-1])
+
+
 def validate_manifests():
     plugin = json.loads(
         (PLUGIN / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
@@ -80,14 +87,14 @@ def main():
 
         # Missing transcript -> blocked with an explanation, exit 0.
         result = run_hook(base_payload(transcript_path=str(data / "nope.jsonl")), data)
-        out = json.loads(result.stdout)
+        out = parse_block_json(result)
         assert result.returncode == 0 and out["decision"] == "block", result.stdout
         print("missing-transcript ok")
 
         # Full render. Clipboard write is skipped unless --clipboard was given.
         env = {} if with_clipboard else {"COPYIMG_NO_CLIPBOARD": "1"}
         result = run_hook(base_payload(), data, env)
-        out = json.loads(result.stdout)
+        out = parse_block_json(result)
         assert result.returncode == 0 and out["decision"] == "block", result.stdout
         png = data / "copyimg.png"
         assert png.is_file() and png.stat().st_size > 10_000, "PNG missing or empty"

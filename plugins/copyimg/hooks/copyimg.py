@@ -123,12 +123,18 @@ def ensure_runtime(hook_input):
             file=sys.stderr,
         )
         try:
-            subprocess.check_call([sys.executable, "-m", "venv", str(VENV_DIR)])
+            # Bootstrap chatter must go to stderr: stdout is reserved for the
+            # hook's JSON response (plain text would be injected as context).
             subprocess.check_call(
-                [str(py), "-m", "pip", "install", "-q", "playwright", "markdown"]
+                [sys.executable, "-m", "venv", str(VENV_DIR)], stdout=sys.stderr
             )
             subprocess.check_call(
-                [str(py), "-m", "playwright", "install", "chromium"]
+                [str(py), "-m", "pip", "install", "-q", "playwright", "markdown"],
+                stdout=sys.stderr,
+            )
+            subprocess.check_call(
+                [str(py), "-m", "playwright", "install", "chromium"],
+                stdout=sys.stderr,
             )
         except subprocess.CalledProcessError as exc:
             block("copyimg: 初始化失败 (%s)。请检查网络后重试。" % exc)
