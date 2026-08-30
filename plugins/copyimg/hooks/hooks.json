@@ -1,0 +1,18 @@
+{
+  "description": "copyimg: intercept /copyimg, render last assistant reply to PNG, copy to clipboard.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/copyimg.py\"",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/hooks/copyimg.py\"",
+            "timeout": 600,
+            "statusMessage": "copyimg: rendering last reply"
+          }
+        ]
+      }
+    ]
+  }
+}

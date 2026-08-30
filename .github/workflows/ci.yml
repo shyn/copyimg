@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            browser-cache: ~/Library/Caches/ms-playwright
+          - os: windows-latest
+            browser-cache: ~\AppData\Local\ms-playwright
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.browser-cache }}
+          key: ${{ runner.os }}-playwright-browsers
+
+      - name: Smoke test (render, no clipboard)
+        run: python tests/smoke_test.py
+
+      - name: Clipboard test
+        if: runner.os == 'macOS'
+        run: python tests/smoke_test.py --clipboard

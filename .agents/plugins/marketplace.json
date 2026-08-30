@@ -1,0 +1,20 @@
+{
+  "name": "copyimg",
+  "interface": {
+    "displayName": "copyimg"
+  },
+  "plugins": [
+    {
+      "name": "copyimg",
+      "source": {
+        "source": "local",
+        "path": "./plugins/copyimg"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
