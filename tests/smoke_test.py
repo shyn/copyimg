@@ -129,6 +129,20 @@ def main():
         assert png.is_file() and png.stat().st_size > 10_000, "PNG missing or empty"
         print("render ok: %d bytes" % png.stat().st_size)
 
+        # Second render with different content must overwrite the PNG
+        # (regression: stale artifacts from a previous run must not be reused).
+        transcript2 = data / "rollout2.jsonl"
+        transcript2.write_text(json.dumps({
+            "type": "response_item",
+            "payload": {"type": "message", "role": "assistant",
+                        "content": [{"type": "output_text",
+                                     "text": "# 第二回合\n\n完全不同的内容 `print('new')`"}]},
+        }) + "\n")
+        first_png = png.read_bytes()
+        run_hook(base_payload(transcript_path=str(transcript2)), data, env)
+        assert png.read_bytes() != first_png, "second render did not overwrite the PNG"
+        print("re-render overwrite ok")
+
         if with_clipboard:
             assert sys.platform == "darwin", "--clipboard is only supported on macOS"
             info = subprocess.run(

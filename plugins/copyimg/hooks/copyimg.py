@@ -289,7 +289,10 @@ def render_png(markdown_text, out_path):
 
     # Pass 1: measure the rendered height (reported back via <title>).
     # --dump-dom writes the serialized DOM in one final write.
+    # Remove stale artifacts first: the expect() polls below would otherwise
+    # see the previous run's output and kill the browser before it writes.
     dom_path = DATA_DIR / "dom.html"
+    dom_path.unlink(missing_ok=True)
     run_browser(
         browser,
         ["--dump-dom", "--window-size=%d,600" % VIEWPORT_WIDTH],
@@ -304,6 +307,7 @@ def render_png(markdown_text, out_path):
 
     # Pass 2: screenshot the page at the measured height, 2x for retina.
     out_png = Path(out_path).resolve()
+    out_png.unlink(missing_ok=True)
     run_browser(
         browser,
         [
