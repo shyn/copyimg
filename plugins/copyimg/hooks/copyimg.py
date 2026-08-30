@@ -24,7 +24,12 @@ import tempfile
 import time
 from pathlib import Path
 
-TRIGGER = "/copyimg"
+# Trigger forms. The Codex TUI rejects unknown `/`-prefixed commands locally
+# ("/copyimg" never reaches the hook), so the user-facing entry point is the
+# bundled skill: `$copyimg`. The bare word and the skill-body marker are also
+# accepted (the marker survives skill expansion into the submitted prompt).
+TRIGGERS = {"$copyimg", "copyimg", "/copyimg"}
+SKILL_MARKER = "[copyimg:copy-last-response-as-image]"
 HOOK_DIR = Path(__file__).resolve().parent
 MARKED_JS = HOOK_DIR / "marked.min.js"
 
@@ -347,7 +352,7 @@ def main():
         return  # malformed input — stay silent, let the prompt through
 
     prompt = (hook_input.get("prompt") or "").strip()
-    if prompt != TRIGGER:
+    if prompt not in TRIGGERS and SKILL_MARKER not in prompt:
         return  # not ours — silent pass-through
 
     text = last_assistant_message(hook_input.get("transcript_path"))

@@ -40,10 +40,18 @@ def base_payload(**overrides):
         "transcript_path": str(TRANSCRIPT),
         "cwd": str(REPO),
         "hook_event_name": "UserPromptSubmit",
-        "prompt": "/copyimg",
+        "prompt": "$copyimg",
     }
     payload.update(overrides)
     return payload
+
+
+TRIGGER_FORMS = [
+    "$copyimg",  # the user-facing form: skill invocation in the TUI
+    "copyimg",   # bare word fallback
+    "/copyimg",  # legacy form
+    "text [copyimg:copy-last-response-as-image] text",  # expanded skill body
+]
 
 
 def parse_block_json(result):
@@ -70,6 +78,13 @@ def validate_manifests():
     entry = marketplace["plugins"][0]
     assert entry["name"] == "copyimg"
     assert (REPO / entry["source"]["path"]).is_dir(), "source.path must resolve"
+
+    skill = PLUGIN / "skills" / "copyimg" / "SKILL.md"
+    assert skill.is_file(), "bundled skill missing"
+    assert plugin.get("skills"), "plugin.json must declare the skills dir"
+    assert "[copyimg:copy-last-response-as-image]" in skill.read_text(
+        encoding="utf-8"
+    ), "skill body must contain the trigger marker"
     print("manifest validation ok")
 
 
@@ -90,6 +105,19 @@ def main():
         out = parse_block_json(result)
         assert result.returncode == 0 and out["decision"] == "block", result.stdout
         print("missing-transcript ok")
+
+        # Every trigger form must be recognized. Checked against a missing
+        # transcript so these run fast (no render).
+        for form in TRIGGER_FORMS:
+            result = run_hook(
+                base_payload(prompt=form, transcript_path=str(data / "nope.jsonl")),
+                data,
+            )
+            out = parse_block_json(result)
+            assert result.returncode == 0 and out["decision"] == "block", (
+                "trigger %r not recognized" % form
+            )
+        print("trigger forms ok: %s" % ", ".join(TRIGGER_FORMS))
 
         # Full render. Clipboard write is skipped unless --clipboard was given.
         env = {} if with_clipboard else {"COPYIMG_NO_CLIPBOARD": "1"}

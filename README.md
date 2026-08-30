@@ -9,16 +9,20 @@ A [Codex CLI](https://github.com/openai/codex) plugin that copies the last assis
 In any Codex session, after a reply you want to keep:
 
 ```
-/copyimg
+$copyimg
 ```
+
+(typing `$` in the composer opens the skill picker — `copyimg` is right there)
 
 That's it. The reply is rendered to a PNG and placed on the system clipboard, ready to paste into Slack, Docs, WeChat, anywhere. The success (or failure) message is shown right in the session.
 
+> Why `$copyimg` and not `/copyimg`? The Codex TUI matches `/`-prefixed input against its built-in command list and rejects unknown commands locally — they never reach hooks. Skills, invoked with `$name`, are the supported user-invocable extension point. Typing the bare word `copyimg` also works.
+
 ## How it works
 
-Codex CLI has no user-defined local slash commands, so `copyimg` emulates one with a `UserPromptSubmit` lifecycle hook:
+Codex CLI has no user-defined local slash commands, so `copyimg` emulates one with a bundled skill plus a `UserPromptSubmit` lifecycle hook:
 
-1. You type `/copyimg`. The hook intercepts the prompt before it reaches the model.
+1. You type `$copyimg`. Codex expands the bundled skill's body into the prompt; the hook intercepts it (via a marker in the skill body) before it reaches the model.
 2. It parses the session transcript and extracts the last assistant message.
 3. The Markdown is rendered in a page by the vendored [marked](https://github.com/markedjs/marked) and screenshotted with your **already-installed browser** (Chrome / Edge / Chromium) in headless mode — two one-shot launches: one to measure the page height via `--dump-dom`, one to take the `--screenshot` at 2x scale for retina displays.
 4. The PNG is written to the clipboard — `osascript` on macOS, PowerShell on Windows.
@@ -67,6 +71,7 @@ codex plugin marketplace remove copyimg
 ├── .agents/plugins/marketplace.json   # marketplace manifest
 ├── plugins/copyimg/
 │   ├── .codex-plugin/plugin.json      # plugin manifest
+│   ├── skills/copyimg/SKILL.md        # `$copyimg` skill (carries the trigger marker)
 │   └── hooks/
 │       ├── hooks.json                 # UserPromptSubmit hook wiring
 │       ├── copyimg.py                 # intercept → render → clipboard
