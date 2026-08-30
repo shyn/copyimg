@@ -75,7 +75,8 @@ codex plugin marketplace remove copyimg
 │   └── hooks/
 │       ├── hooks.json                 # UserPromptSubmit hook wiring
 │       ├── copyimg.py                 # intercept → render → clipboard
-│       └── marked.min.js              # vendored markdown renderer (MIT)
+│       ├── marked.min.js              # vendored markdown renderer (MIT)
+│       └── highlight.min.js           # vendored syntax highlighter (BSD-3-Clause)
 └── tests/
     ├── fake_rollout.jsonl             # sample Codex transcript
     └── smoke_test.py                  # end-to-end test, no Codex needed

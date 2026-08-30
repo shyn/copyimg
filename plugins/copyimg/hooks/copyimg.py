@@ -34,6 +34,7 @@ TRIGGERS = {"copyimg", "/copyimg", "$copyimg", "$copyimg:copyimg", "copyimg:copy
 SKILL_MARKER = "[copyimg:copy-last-response-as-image]"
 HOOK_DIR = Path(__file__).resolve().parent
 MARKED_JS = HOOK_DIR / "marked.min.js"
+HIGHLIGHT_JS = HOOK_DIR / "highlight.min.js"
 
 DATA_DIR = Path(
     os.environ.get("PLUGIN_DATA") or (Path(tempfile.gettempdir()) / "copyimg")
@@ -120,6 +121,19 @@ hr {
 }
 a { color: #4f46e5; text-decoration: none; border-bottom: 1px solid #c7d2fe; }
 img { max-width: 100%; border-radius: 10px; }
+/* highlight.js — github-dark palette */
+.hljs-comment, .hljs-quote { color: #8b949e; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-template-tag { color: #ff7b72; }
+.hljs-string, .hljs-regexp, .hljs-meta .hljs-string { color: #a5d6ff; }
+.hljs-number, .hljs-literal { color: #79c0ff; }
+.hljs-title, .hljs-title.function_, .hljs-section { color: #d2a8ff; }
+.hljs-title.class_, .hljs-type, .hljs-built_in { color: #ffa657; }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable,
+.hljs-selector-id, .hljs-selector-class { color: #79c0ff; }
+.hljs-name, .hljs-selector-pseudo, .hljs-tag { color: #7ee787; }
+.hljs-meta, .hljs-symbol, .hljs-bullet, .hljs-link { color: #f2cc60; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
 """
 
 # The page renders the markdown, then reports its full height via <title> so
@@ -133,8 +147,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body class="markdown-body"><div class="card" id="content"></div>
 <script>__MARKED__</script>
+<script>__HIGHLIGHT__</script>
 <script>
 document.getElementById("content").innerHTML = marked.parse(__MARKDOWN_JSON__);
+document.querySelectorAll("#content pre code").forEach(function (el) {
+  hljs.highlightElement(el);
+});
 document.title = String(Math.ceil(document.documentElement.scrollHeight));
 </script>
 </body>
@@ -235,11 +253,13 @@ def last_assistant_message(transcript_path):
 
 def build_html(markdown_text):
     marked_source = MARKED_JS.read_text(encoding="utf-8")
+    highlight_source = HIGHLIGHT_JS.read_text(encoding="utf-8")
     # Escape "</" so the embedded JSON can't terminate the script element.
     markdown_json = json.dumps(markdown_text, ensure_ascii=False).replace("</", "<\\/")
     return (
         HTML_TEMPLATE.replace("__CSS__", CSS)
         .replace("__MARKED__", marked_source)
+        .replace("__HIGHLIGHT__", highlight_source)
         .replace("__MARKDOWN_JSON__", markdown_json)
     )
 
