@@ -20,7 +20,7 @@ Codex CLI has no user-defined local slash commands, so `copyimg` emulates one wi
 
 1. You type `/copyimg`. The hook intercepts the prompt before it reaches the model.
 2. It parses the session transcript and extracts the last assistant message.
-3. The Markdown is rendered to HTML and screenshotted full-page with a headless Chromium (via Playwright, 2x scale for retina displays).
+3. The Markdown is rendered in a page by the vendored [marked](https://github.com/markedjs/marked) and screenshotted with your **already-installed browser** (Chrome / Edge / Chromium) in headless mode — two one-shot launches: one to measure the page height via `--dump-dom`, one to take the `--screenshot` at 2x scale for retina displays.
 4. The PNG is written to the clipboard — `osascript` on macOS, PowerShell on Windows.
 5. The hook blocks the prompt, so **no tokens are spent** and nothing is sent to the model.
 
@@ -30,9 +30,10 @@ Any other prompt passes through untouched.
 
 - Codex CLI with plugin + hook support (v0.128.0 or later recommended)
 - Python 3 on the PATH — `python3` on macOS, the `py` launcher on Windows
+- Chrome, Edge, or Chromium installed (Edge is preinstalled on Windows)
 - macOS or Windows
 
-On first use the plugin creates an isolated venv in its plugin data directory and downloads a Chromium build (~180 MB). Your system Python is never touched. Subsequent runs take about a second.
+**Zero third-party dependencies** — the hook is pure Python stdlib. Nothing to install, no browser download, no first-run setup.
 
 ## Install
 
@@ -50,6 +51,7 @@ To update later:
 
 ```sh
 codex plugin marketplace upgrade copyimg
+codex plugin remove copyimg@copyimg && codex plugin add copyimg@copyimg
 ```
 
 ## Uninstall
@@ -67,7 +69,8 @@ codex plugin marketplace remove copyimg
 │   ├── .codex-plugin/plugin.json      # plugin manifest
 │   └── hooks/
 │       ├── hooks.json                 # UserPromptSubmit hook wiring
-│       └── copyimg.py                 # intercept → render → clipboard
+│       ├── copyimg.py                 # intercept → render → clipboard
+│       └── marked.min.js              # vendored markdown renderer (MIT)
 └── tests/
     ├── fake_rollout.jsonl             # sample Codex transcript
     └── smoke_test.py                  # end-to-end test, no Codex needed
@@ -83,6 +86,7 @@ python tests/smoke_test.py --clipboard # also verify the clipboard write (macOS)
 ## Caveats
 
 - The transcript (rollout jsonl) format is not a stable Codex interface. The parser accepts several known shapes, but a future Codex release may require an update here.
+- Pages taller than 16000 px are cropped (browser window-size limit).
 - Linux is not supported (no clipboard backend wired up) — contributions welcome.
 
 ## License

@@ -1,6 +1,6 @@
 {
   "name": "copyimg",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Type /copyimg to render the last assistant reply as a PNG image and copy it to the clipboard (macOS / Windows).",
   "license": "MIT",
   "homepage": "https://github.com/shyn/copyimg",

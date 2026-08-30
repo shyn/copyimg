@@ -10,11 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            browser-cache: ~/Library/Caches/ms-playwright
-          - os: windows-latest
-            browser-cache: ~\AppData\Local\ms-playwright
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -23,12 +19,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ${{ matrix.browser-cache }}
-          key: ${{ runner.os }}-playwright-browsers
-
+      # Runners already ship a browser (Chrome on macOS, Edge on Windows) —
+      # the plugin needs nothing else.
       - name: Smoke test (render, no clipboard)
         run: python tests/smoke_test.py
 

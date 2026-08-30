@@ -6,35 +6,38 @@ assistant message from the session transcript to a PNG and copies the image
 to the system clipboard (macOS / Windows), then blocks the prompt so it is
 never sent to the model.
 
-Non-matching prompts pass through silently (no stdout, zero token cost).
+Zero third-party dependencies: pure Python stdlib plus a system browser
+(Chrome / Edge / Chromium) driven via its headless CLI. Markdown is rendered
+in-page by the vendored `marked.min.js` next to this script.
 
-Third-party deps (playwright, markdown, chromium browser) are installed on
-first use into an isolated venv under PLUGIN_DATA — nothing touches the
-system Python.
+Non-matching prompts pass through silently (no stdout, zero token cost).
 """
 
 import json
 import os
 import platform
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 TRIGGER = "/copyimg"
+HOOK_DIR = Path(__file__).resolve().parent
+MARKED_JS = HOOK_DIR / "marked.min.js"
 
 DATA_DIR = Path(
     os.environ.get("PLUGIN_DATA") or (Path(tempfile.gettempdir()) / "copyimg")
 )
-VENV_DIR = DATA_DIR / "venv"
 OUT_PNG = DATA_DIR / "copyimg.png"
-INPUT_STASH = DATA_DIR / "hook-input.json"
+OUT_HTML = DATA_DIR / "copyimg.html"
 
-HTML_TEMPLATE = """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
+VIEWPORT_WIDTH = 940
+MAX_HEIGHT = 16000
+
+CSS = """
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
 html { background: #ffffff; }
@@ -70,9 +73,24 @@ th { background: #f6f8fa; }
 hr { border: none; border-top: 1px solid #d1d9e0; margin: 1.4em 0; }
 a { color: #0969da; text-decoration: none; }
 img { max-width: 100%; }
-</style>
+"""
+
+# The page renders the markdown, then reports its full height via <title> so
+# the measure pass can read it back from --dump-dom output.
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>0</title>
+<style>__CSS__</style>
 </head>
-<body class="markdown-body"><!--BODY--></body>
+<body class="markdown-body"><div id="content"></div>
+<script>__MARKED__</script>
+<script>
+document.getElementById("content").innerHTML = marked.parse(__MARKDOWN_JSON__);
+document.title = String(Math.ceil(document.documentElement.scrollHeight));
+</script>
+</body>
 </html>
 """
 
@@ -83,67 +101,31 @@ def block(reason):
     sys.exit(0)
 
 
-def read_hook_input():
-    """Hook payload comes from stdin, or from the stash file after a re-run."""
-    stash = os.environ.get("COPYIMG_INPUT_FILE")
-    if stash:
-        return json.loads(Path(stash).read_text(encoding="utf-8"))
-    return json.load(sys.stdin)
-
-
-def venv_python():
-    if os.name == "nt":
-        return VENV_DIR / "Scripts" / "python.exe"
-    return VENV_DIR / "bin" / "python"
-
-
-def ensure_runtime(hook_input):
-    """Make sure playwright/markdown are importable; bootstrap a venv if not."""
-    try:
-        import markdown  # noqa: F401
-        import playwright.sync_api  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-
-    if os.environ.get("COPYIMG_BOOTSTRAPPED") == "1":
-        block(
-            "copyimg: 依赖安装失败。请删除目录后重试: %s" % VENV_DIR
-        )
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    INPUT_STASH.write_text(
-        json.dumps(hook_input, ensure_ascii=False), encoding="utf-8"
-    )
-    py = venv_python()
-    if not py.exists():
-        print(
-            "copyimg: first run — creating isolated env (venv + playwright + chromium)...",
-            file=sys.stderr,
-        )
-        try:
-            # Bootstrap chatter must go to stderr: stdout is reserved for the
-            # hook's JSON response (plain text would be injected as context).
-            subprocess.check_call(
-                [sys.executable, "-m", "venv", str(VENV_DIR)], stdout=sys.stderr
-            )
-            subprocess.check_call(
-                [str(py), "-m", "pip", "install", "-q", "playwright", "markdown"],
-                stdout=sys.stderr,
-            )
-            subprocess.check_call(
-                [str(py), "-m", "playwright", "install", "chromium"],
-                stdout=sys.stderr,
-            )
-        except subprocess.CalledProcessError as exc:
-            block("copyimg: 初始化失败 (%s)。请检查网络后重试。" % exc)
-
-    env = dict(os.environ)
-    env["COPYIMG_BOOTSTRAPPED"] = "1"
-    env["COPYIMG_INPUT_FILE"] = str(INPUT_STASH)
-    completed = subprocess.run([str(py), os.path.abspath(__file__)], env=env)
-    sys.exit(completed.returncode)
+def find_browser():
+    """Locate a system Chromium-family browser. Returns a path or None."""
+    candidates = []
+    if sys.platform == "darwin":
+        candidates += [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+    elif os.name == "nt":
+        for env_var in ("ProgramFiles(x86)", "ProgramFiles", "LocalAppData"):
+            base = os.environ.get(env_var)
+            if base:
+                candidates += [
+                    os.path.join(base, r"Microsoft\Edge\Application\msedge.exe"),
+                    os.path.join(base, r"Google\Chrome\Application\chrome.exe"),
+                ]
+    for name in ("chrome", "google-chrome", "msedge", "chromium", "chromium-browser"):
+        path = shutil.which(name)
+        if path:
+            candidates.append(path)
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    return None
 
 
 def extract_text(payload):
@@ -204,26 +186,130 @@ def last_assistant_message(transcript_path):
     return last
 
 
-def render_png(markdown_text, out_path):
-    import markdown
-    from playwright.sync_api import sync_playwright
-
-    body = markdown.markdown(
-        markdown_text, extensions=["fenced_code", "tables", "sane_lists"]
+def build_html(markdown_text):
+    marked_source = MARKED_JS.read_text(encoding="utf-8")
+    # Escape "</" so the embedded JSON can't terminate the script element.
+    markdown_json = json.dumps(markdown_text, ensure_ascii=False).replace("</", "<\\/")
+    return (
+        HTML_TEMPLATE.replace("__CSS__", CSS)
+        .replace("__MARKED__", marked_source)
+        .replace("__MARKDOWN_JSON__", markdown_json)
     )
-    html = HTML_TEMPLATE.replace("<!--BODY-->", body)
 
-    out_path = Path(out_path)
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch()
-        context = browser.new_context(
-            viewport={"width": 940, "height": 600}, device_scale_factor=2
+
+def tail_contains(path, needle, tail_bytes=8192):
+    try:
+        with open(path, "rb") as fh:
+            fh.seek(0, 2)
+            fh.seek(max(0, fh.tell() - tail_bytes))
+            return needle in fh.read()
+    except OSError:
+        return False
+
+
+def file_stable(path, interval=0.3):
+    try:
+        size = Path(path).stat().st_size
+        if size == 0:
+            return False
+        time.sleep(interval)
+        return Path(path).stat().st_size == size
+    except OSError:
+        return False
+
+
+def run_browser(browser, extra_args, html_uri, dom_out=None, expect=None, timeout=60):
+    """Launch the browser one-shot and reap it once the artifact is ready.
+
+    One-shot headless Chrome/Edge frequently never exits (helpers outlive the
+    main process, background services delay shutdown), so instead of waiting
+    for exit we poll the output artifact and kill the browser once it is
+    complete. A fresh profile per run avoids singleton locks left behind by
+    killed helpers.
+    """
+    profile = Path(tempfile.mkdtemp(prefix="copyimg-profile-", dir=DATA_DIR))
+    args = [
+        browser,
+        "--headless",
+        "--disable-gpu",
+        "--hide-scrollbars",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-breakpad",
+        "--disable-field-trial-config",
+        "--disable-hang-monitor",
+        "--disable-sync",
+        "--disable-extensions",
+        "--disable-default-apps",
+        "--metrics-recording-only",
+        "--mute-audio",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--user-data-dir=%s" % profile,
+    ] + extra_args + [html_uri]
+    stdout_fh = (
+        open(dom_out, "w", encoding="utf-8")
+        if dom_out is not None
+        else open(os.devnull, "w")
+    )
+    try:
+        proc = subprocess.Popen(args, stdout=stdout_fh, stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if expect and expect():
+                break
+            if proc.poll() is not None:
+                break
+            time.sleep(0.2)
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait()
+    finally:
+        stdout_fh.close()
+        shutil.rmtree(profile, ignore_errors=True)
+
+
+def render_png(markdown_text, out_path):
+    browser = find_browser()
+    if not browser:
+        raise RuntimeError(
+            "未找到 Chrome / Edge / Chromium，请先安装其中之一"
         )
-        page = context.new_page()
-        page.set_content(html, wait_until="load")
-        page.screenshot(path=str(out_path), full_page=True)
-        browser.close()
-    return out_path
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    OUT_HTML.write_text(build_html(markdown_text), encoding="utf-8")
+    html_uri = OUT_HTML.as_uri()
+
+    # Pass 1: measure the rendered height (reported back via <title>).
+    # --dump-dom writes the serialized DOM in one final write.
+    dom_path = DATA_DIR / "dom.html"
+    run_browser(
+        browser,
+        ["--dump-dom", "--window-size=%d,600" % VIEWPORT_WIDTH],
+        html_uri,
+        dom_out=dom_path,
+        expect=lambda: tail_contains(dom_path, b"</html>"),
+    )
+    dom = dom_path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r"<title>(\d+)</title>", dom)
+    height = int(match.group(1)) if match else 1200
+    height = max(100, min(height, MAX_HEIGHT))
+
+    # Pass 2: screenshot the page at the measured height, 2x for retina.
+    out_png = Path(out_path).resolve()
+    run_browser(
+        browser,
+        [
+            "--force-device-scale-factor=2",
+            "--screenshot=%s" % out_png,
+            "--window-size=%d,%d" % (VIEWPORT_WIDTH, height),
+        ],
+        html_uri,
+        expect=lambda: file_stable(out_png),
+    )
+    if not out_png.is_file() or out_png.stat().st_size == 0:
+        raise RuntimeError("浏览器截图失败: %s" % browser)
+    return out_png
 
 
 def copy_to_clipboard(png_path):
@@ -256,15 +342,13 @@ def copy_to_clipboard(png_path):
 
 def main():
     try:
-        hook_input = read_hook_input()
+        hook_input = json.load(sys.stdin)
     except Exception:
         return  # malformed input — stay silent, let the prompt through
 
     prompt = (hook_input.get("prompt") or "").strip()
     if prompt != TRIGGER:
         return  # not ours — silent pass-through
-
-    ensure_runtime(hook_input)
 
     text = last_assistant_message(hook_input.get("transcript_path"))
     if not text:
