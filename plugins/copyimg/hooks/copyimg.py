@@ -285,6 +285,33 @@ def file_stable(path, interval=0.3):
         return False
 
 
+def force_unlink(path, attempts=10):
+    """Unlink, tolerating a briefly lingering handle from a killed browser."""
+    for _ in range(attempts):
+        try:
+            Path(path).unlink(missing_ok=True)
+            return
+        except PermissionError:
+            time.sleep(0.3)
+    Path(path).unlink(missing_ok=True)
+
+
+def kill_process_tree(proc):
+    """Kill the browser and all its helper processes.
+
+    proc.kill() only terminates the root process; on Windows the Chromium
+    helpers survive and keep inherited handles (e.g. the --dump-dom stdout
+    file) open, which makes the next run's unlink fail with WinError 32.
+    """
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            capture_output=True,
+        )
+    else:
+        proc.kill()
+
+
 def run_browser(browser, extra_args, html_uri, dom_out=None, expect=None, timeout=60):
     """Launch the browser one-shot and reap it once the artifact is ready.
 
@@ -329,7 +356,7 @@ def run_browser(browser, extra_args, html_uri, dom_out=None, expect=None, timeou
                 break
             time.sleep(0.2)
         if proc.poll() is None:
-            proc.kill()
+            kill_process_tree(proc)
         proc.wait()
     finally:
         stdout_fh.close()
@@ -352,7 +379,7 @@ def render_png(markdown_text, out_path):
     # Remove stale artifacts first: the expect() polls below would otherwise
     # see the previous run's output and kill the browser before it writes.
     dom_path = DATA_DIR / "dom.html"
-    dom_path.unlink(missing_ok=True)
+    force_unlink(dom_path)
     run_browser(
         browser,
         ["--dump-dom", "--window-size=%d,600" % VIEWPORT_WIDTH],
@@ -367,7 +394,7 @@ def render_png(markdown_text, out_path):
 
     # Pass 2: screenshot the page at the measured height, 2x for retina.
     out_png = Path(out_path).resolve()
-    out_png.unlink(missing_ok=True)
+    force_unlink(out_png)
     run_browser(
         browser,
         [

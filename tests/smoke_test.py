@@ -139,7 +139,10 @@ def main():
                                      "text": "# 第二回合\n\n完全不同的内容 `print('new')`"}]},
         }) + "\n")
         first_png = png.read_bytes()
-        run_hook(base_payload(transcript_path=str(transcript2)), data, env)
+        result = run_hook(base_payload(transcript_path=str(transcript2)), data, env)
+        out = parse_block_json(result)
+        assert result.returncode == 0 and out["decision"] == "block", result.stdout
+        assert out["reason"].startswith("✅"), "second render failed: %s" % out
         assert png.read_bytes() != first_png, "second render did not overwrite the PNG"
         print("re-render overwrite ok")
 
