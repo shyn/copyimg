@@ -47,39 +47,79 @@ MAX_HEIGHT = 16000
 CSS = """
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
-html { background: #ffffff; }
-body {
-  width: 860px; margin: 0 auto; padding: 36px 44px;
-  background: #ffffff; color: #1f2328;
-  font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI",
-        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+html {
+  background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 50%, #fce7f3 100%);
 }
-h1, h2, h3, h4 { margin: 1.1em 0 .5em; line-height: 1.3; }
-h1 { font-size: 1.5em; border-bottom: 1px solid #d1d9e0; padding-bottom: .3em; }
-h2 { font-size: 1.3em; border-bottom: 1px solid #eaeef2; padding-bottom: .25em; }
-h3 { font-size: 1.15em; }
-p { margin: .6em 0; }
+body {
+  margin: 0; padding: 48px 56px;
+  color: #1f2937;
+  font: 15.5px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.card {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, .16), 0 2px 8px rgba(15, 23, 42, .08);
+  padding: 44px 52px;
+}
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+h1, h2, h3, h4 {
+  margin: 1.25em 0 .55em; line-height: 1.3; color: #111827;
+  font-weight: 700; letter-spacing: -.01em;
+}
+h1 { font-size: 1.6em; padding-bottom: .35em; border-bottom: 1px solid #eef0f4; }
+h2 { font-size: 1.32em; padding-bottom: .3em; border-bottom: 1px solid #f2f4f7; }
+h3 { font-size: 1.14em; }
+p { margin: .65em 0; }
+strong { color: #111827; }
 code {
-  font: .92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: #eff1f3; padding: .15em .4em; border-radius: 6px;
+  font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #f1f5f9; color: #be185d;
+  padding: .15em .42em; border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 pre {
-  background: #f6f8fa; border-radius: 8px; padding: 14px 16px;
+  margin: .9em 0;
+  background: #0d1117; color: #e6edf3;
+  border-radius: 12px; padding: 14px 18px 16px;
   overflow-x: auto;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .18);
 }
-pre code { background: none; padding: 0; }
+pre::before {
+  content: ""; display: block; height: 12px; margin: 0 0 12px;
+  background-image:
+    radial-gradient(circle at 8px 6px, #ff5f57 5.5px, rgba(0,0,0,0) 6.5px),
+    radial-gradient(circle at 28px 6px, #febc2e 5.5px, rgba(0,0,0,0) 6.5px),
+    radial-gradient(circle at 48px 6px, #28c840 5.5px, rgba(0,0,0,0) 6.5px);
+  background-repeat: no-repeat;
+}
+pre code { background: none; border: none; color: inherit; padding: 0; font-size: .92em; }
 blockquote {
-  margin: .8em 0; padding: 0 1em; color: #59636e;
-  border-left: 4px solid #d1d9e0;
+  margin: .9em 0; padding: 12px 18px;
+  background: #f8fafc; border-left: 4px solid #818cf8;
+  border-radius: 0 10px 10px 0; color: #475569;
 }
-ul, ol { padding-left: 1.6em; margin: .6em 0; }
-li { margin: .25em 0; }
-table { border-collapse: collapse; margin: .8em 0; }
-th, td { border: 1px solid #d1d9e0; padding: 6px 12px; }
-th { background: #f6f8fa; }
-hr { border: none; border-top: 1px solid #d1d9e0; margin: 1.4em 0; }
-a { color: #0969da; text-decoration: none; }
-img { max-width: 100%; }
+blockquote > :first-child { margin-top: 0; }
+blockquote > :last-child { margin-bottom: 0; }
+ul, ol { padding-left: 1.55em; margin: .65em 0; }
+li { margin: .3em 0; }
+li::marker { color: #818cf8; }
+table {
+  border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .94em;
+  border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px #e5e7eb;
+}
+th, td { padding: 9px 14px; text-align: left; border-bottom: 1px solid #eef0f3; }
+th { background: #f8fafc; font-weight: 600; color: #111827; }
+tbody tr:nth-child(even) { background: #fafbfc; }
+tr:last-child td { border-bottom: none; }
+hr {
+  border: none; height: 1px; margin: 1.7em 0;
+  background: linear-gradient(90deg, rgba(0,0,0,0), #d8dee6, rgba(0,0,0,0));
+}
+a { color: #4f46e5; text-decoration: none; border-bottom: 1px solid #c7d2fe; }
+img { max-width: 100%; border-radius: 10px; }
 """
 
 # The page renders the markdown, then reports its full height via <title> so
@@ -91,7 +131,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <title>0</title>
 <style>__CSS__</style>
 </head>
-<body class="markdown-body"><div id="content"></div>
+<body class="markdown-body"><div class="card" id="content"></div>
 <script>__MARKED__</script>
 <script>
 document.getElementById("content").innerHTML = marked.parse(__MARKDOWN_JSON__);
