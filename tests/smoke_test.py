@@ -47,9 +47,10 @@ def base_payload(**overrides):
 
 
 TRIGGER_FORMS = [
-    "$copyimg",  # the user-facing form: skill invocation in the TUI
-    "copyimg",   # bare word fallback
-    "/copyimg",  # legacy form
+    "$copyimg:copyimg",  # the actual form the TUI composer submits ($plugin:skill)
+    "$copyimg",
+    "copyimg",           # bare word fallback
+    "/copyimg",          # legacy form
     "text [copyimg:copy-last-response-as-image] text",  # expanded skill body
 ]
 

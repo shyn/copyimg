@@ -12,7 +12,7 @@ In any Codex session, after a reply you want to keep:
 $copyimg
 ```
 
-(typing `$` in the composer opens the skill picker — `copyimg` is right there)
+(typing `$` in the composer opens the skill picker — pick `copyimg`; it submits as `$copyimg:copyimg`, that's normal)
 
 That's it. The reply is rendered to a PNG and placed on the system clipboard, ready to paste into Slack, Docs, WeChat, anywhere. The success (or failure) message is shown right in the session.
 

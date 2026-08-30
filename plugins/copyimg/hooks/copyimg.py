@@ -26,9 +26,11 @@ from pathlib import Path
 
 # Trigger forms. The Codex TUI rejects unknown `/`-prefixed commands locally
 # ("/copyimg" never reaches the hook), so the user-facing entry point is the
-# bundled skill: `$copyimg`. The bare word and the skill-body marker are also
-# accepted (the marker survives skill expansion into the submitted prompt).
-TRIGGERS = {"$copyimg", "copyimg", "/copyimg"}
+# bundled skill. In the composer that shows up as `$copyimg:copyimg`
+# ($<plugin>:<skill>) and is submitted verbatim — the skill body is expanded
+# as a *separate* follow-up user message, so the hook must match the raw
+# reference form, not just the expansion marker.
+TRIGGERS = {"copyimg", "/copyimg", "$copyimg", "$copyimg:copyimg", "copyimg:copyimg"}
 SKILL_MARKER = "[copyimg:copy-last-response-as-image]"
 HOOK_DIR = Path(__file__).resolve().parent
 MARKED_JS = HOOK_DIR / "marked.min.js"
