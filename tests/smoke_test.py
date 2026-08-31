@@ -146,6 +146,32 @@ def main():
         assert png.read_bytes() != first_png, "second render did not overwrite the PNG"
         print("re-render overwrite ok")
 
+        # Forked session: the child rollout has no assistant message; the
+        # hook must follow session_meta.history_base to the parent thread.
+        day_dir = data / "sessions" / "2026" / "08" / "30"
+        day_dir.mkdir(parents=True)
+        parent_id = "11111111-2222-3333-4444-555555555555"
+        parent_line = json.dumps({
+            "type": "response_item",
+            "payload": {"type": "message", "role": "assistant",
+                        "content": [{"type": "output_text",
+                                     "text": "# 父会话\n\nfork 之前的回复"}]},
+        }) + "\n"
+        (day_dir / ("rollout-parent-%s.jsonl" % parent_id)).write_text(parent_line)
+        child = day_dir / "rollout-child-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jsonl"
+        child.write_text(json.dumps({
+            "type": "session_meta",
+            "payload": {"id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                        "forked_from_id": parent_id,
+                        "history_base": {"thread_id": parent_id,
+                                         "end_byte_offset": len(parent_line.encode("utf-8"))}},
+        }) + "\n")
+        result = run_hook(base_payload(transcript_path=str(child)), data, env)
+        out = parse_block_json(result)
+        assert result.returncode == 0 and out["decision"] == "block", result.stdout
+        assert out["reason"].startswith("✅"), "fork lineage failed: %s" % out
+        print("fork lineage ok")
+
         if with_clipboard:
             assert sys.platform == "darwin", "--clipboard is only supported on macOS"
             info = subprocess.run(

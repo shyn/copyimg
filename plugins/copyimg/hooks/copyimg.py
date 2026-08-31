@@ -212,20 +212,43 @@ def extract_text(payload):
     return "\n".join(parts).strip()
 
 
-def last_assistant_message(transcript_path):
+def find_thread_file(sessions_root, thread_id):
+    """Locate the rollout file for a thread id under ~/.codex/sessions/."""
+    try:
+        matches = sorted(sessions_root.rglob("*%s.jsonl" % thread_id))
+    except OSError:
+        return None
+    return matches[0] if matches else None
+
+
+def last_assistant_message(transcript_path, _depth=0, _byte_limit=None):
     """Best-effort parse of the rollout jsonl for the last assistant text.
 
     The transcript format is not a stable interface, so several known shapes
-    are accepted. Returns None when nothing usable is found.
+    are accepted. Forked/resumed sessions record only post-fork turns; their
+    inherited history stays in the parent thread's rollout, reachable via
+    session_meta's history_base (thread_id + end_byte_offset marking the fork
+    point) or forked_from_id. Returns None when nothing usable is found.
     """
-    if not transcript_path:
+    if not transcript_path or _depth > 5:
         return None
     path = Path(transcript_path)
     if not path.is_file():
         return None
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    # A byte limit may cut the final line mid-record; the JSONDecodeError
+    # skip below discards the partial line.
+    if _byte_limit is not None:
+        raw = raw[:_byte_limit]
+    text = raw.decode("utf-8", errors="replace")
 
     last = None
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    history_base = None
+    forked_from = None
+    for line in text.splitlines():
         line = line.strip()
         if not line:
             continue
@@ -236,8 +259,15 @@ def last_assistant_message(transcript_path):
         if not isinstance(record, dict):
             continue
 
-        candidates = [record]
         payload = record.get("payload")
+        if record.get("type") == "session_meta" and isinstance(payload, dict):
+            base = payload.get("history_base")
+            if isinstance(base, dict) and history_base is None:
+                history_base = base
+            if forked_from is None:
+                forked_from = payload.get("forked_from_id")
+
+        candidates = [record]
         if isinstance(payload, dict):
             candidates.append(payload)
 
@@ -245,14 +275,26 @@ def last_assistant_message(transcript_path):
             role = cand.get("role")
             ctype = cand.get("type")
             if role == "assistant" and ctype in (None, "message"):
-                text = extract_text(cand)
-                if text:
-                    last = text
+                cand_text = extract_text(cand)
+                if cand_text:
+                    last = cand_text
             elif ctype == "agent_message" and isinstance(cand.get("message"), str):
-                text = cand["message"].strip()
-                if text:
-                    last = text
-    return last
+                cand_text = cand["message"].strip()
+                if cand_text:
+                    last = cand_text
+    if last is not None:
+        return last
+
+    # No assistant turn after the fork point — follow the lineage.
+    sessions_root = path.parents[3] if len(path.parents) >= 4 else path.parent
+    base = history_base or {}
+    thread_id = base.get("thread_id") or forked_from
+    if not thread_id:
+        return None
+    parent = find_thread_file(sessions_root, thread_id)
+    if parent is None or parent == path:
+        return None
+    return last_assistant_message(str(parent), _depth + 1, base.get("end_byte_offset"))
 
 
 def build_html(markdown_text):
