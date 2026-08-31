@@ -153,7 +153,11 @@ document.getElementById("content").innerHTML = marked.parse(__MARKDOWN_JSON__);
 document.querySelectorAll("#content pre code").forEach(function (el) {
   hljs.highlightElement(el);
 });
-document.title = String(Math.ceil(document.documentElement.scrollHeight));
+// Measure the card's bottom edge rather than document scrollHeight — some
+// headless builds (Edge on Windows) enforce a minimum viewport height and
+// would report dead space below the card. +48 matches body's bottom padding.
+var bottom = document.getElementById("content").getBoundingClientRect().bottom;
+document.title = String(Math.ceil(bottom + 48));
 </script>
 </body>
 </html>

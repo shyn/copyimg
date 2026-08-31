@@ -33,7 +33,7 @@ Any other prompt passes through untouched.
 ## Requirements
 
 - Codex CLI with plugin + hook support (v0.128.0 or later recommended)
-- Python 3 on the PATH — `python3` on macOS, the `py` launcher on Windows
+- Python 3 — `python3` on macOS; on Windows the `py` launcher, falling back to `python` on the PATH (scoop / uv / Microsoft Store installs)
 - Chrome, Edge, or Chromium installed (Edge is preinstalled on Windows)
 - macOS or Windows
 

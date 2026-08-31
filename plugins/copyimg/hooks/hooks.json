@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "python3 \"${PLUGIN_ROOT}/hooks/copyimg.py\"",
-            "commandWindows": "py -3 \"${PLUGIN_ROOT}/hooks/copyimg.py\"",
+            "commandWindows": "py -3 \"${PLUGIN_ROOT}/hooks/copyimg.py\" 2>nul || python \"${PLUGIN_ROOT}/hooks/copyimg.py\"",
             "timeout": 600,
             "statusMessage": "copyimg: rendering last reply"
           }
